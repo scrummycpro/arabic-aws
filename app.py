@@ -2,6 +2,7 @@ from flask import Flask, request, render_template, jsonify, send_file
 from flask_admin import Admin
 from flask_admin.contrib.sqla import ModelView
 from flask_sqlalchemy import SQLAlchemy
+from flask_babel import Babel  # Import Flask-Babel instead of Flask-BabelEx
 from transformers import MarianMTModel, MarianTokenizer
 import os
 import sqlite3
@@ -14,7 +15,10 @@ app = Flask(__name__)
 # Configure Flask and SQLAlchemy
 app.config['SECRET_KEY'] = 'mysecret'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///translations.db'
+
+# Initialize SQLAlchemy and Flask-Babel
 db = SQLAlchemy(app)
+babel = Babel(app)  # Initialize Flask-Babel
 
 # Model for storing AWS credentials
 class AWSCredentials(db.Model):
