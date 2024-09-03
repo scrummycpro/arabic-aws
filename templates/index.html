@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>English to Arabic Translator</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .large-arabic-text {
+            font-size: 2.5rem;
+            text-align: center;
+            margin-top: 20px;
+            direction: rtl;
+        }
+        .result-container {
+            margin-top: 20px;
+        }
+        .btn-container {
+            text-align: center;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-light bg-light">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/">Translator</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/recent">Recent Translations</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-5">
+        <h1 class="text-center">English to Arabic Translator</h1>
+        <form id="translate-form" method="POST" enctype="multipart/form-data">
+            <div class="mb-3">
+                <label for="englishText" class="form-label">Enter English Text or Upload a Text File</label>
+                <textarea class="form-control" id="englishText" name="text" rows="4"></textarea>
+            </div>
+            <div class="mb-3">
+                <label for="text_file" class="form-label">Upload Text File</label>
+                <input class="form-control" type="file" id="text_file" name="text_file" accept=".txt">
+            </div>
+            <button type="submit" class="btn btn-primary">Translate</button>
+        </form>
+
+        <div id="results" class="result-container">
+            <h3>Translated to Arabic:</h3>
+            <p id="translatedArabicText" class="large-arabic-text"></p>
+        </div>
+
+        <div class="btn-container">
+            <button id="exportBtn" class="btn btn-success">Export to CSV</button>
+            <button id="updateBtn" class="btn btn-info">Update Existing CSV</button>
+            <a href="#" id="downloadLink" class="btn btn-secondary">Download CSV</a>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.6/dist/umd/popper.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.min.js"></script>
+    <script>
+        $(document).ready(function() {
+            let translatedText = '';
+            let originalText = '';
+
+            $('#translate-form').on('submit', function(e) {
+                e.preventDefault();
+                var formData = new FormData(this);
+
+                $.ajax({
+                    type: 'POST',
+                    url: '/translate',
+                    data: formData,
+                    processData: false,
+                    contentType: false,
+                    success: function(response) {
+                        originalText = response.original_text;
+                        translatedText = response.translated_text;
+                        $('#translatedArabicText').text(translatedText);
+                    }
+                });
+            });
+
+            $('#exportBtn').on('click', function() {
+                $.ajax({
+                    type: 'POST',
+                    url: '/export',
+                    data: { original_text: originalText, translated_text: translatedText },
+                    xhrFields: {
+                        responseType: 'blob'
+                    },
+                    success: function(response, status, xhr) {
+                        var blob = new Blob([response], { type: 'text/csv' });
+                        var link = document.createElement('a');
+                        link.href = window.URL.createObjectURL(blob);
+                        link.download = "translation_output.csv";
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                    },
+                    error: function() {
+                        alert('Error exporting the file.');
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+</html>
