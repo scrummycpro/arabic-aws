@@ -44,13 +44,60 @@
             </tbody>
         </table>
 
-        <form id="export-last-20-form" method="POST" action="/export-last-20">
+        <form id="export-last-20-form" method="POST">
             <button type="submit" class="btn btn-success">Export Last 20 Translations to S3</button>
         </form>
+    </div>
+
+    <!-- Modal -->
+    <div class="modal fade" id="confirmationModal" tabindex="-1" aria-labelledby="confirmationModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="confirmationModalLabel">Export Status</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" id="modalBody">
+                    <!-- Status message will be inserted here -->
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.6/dist/umd/popper.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.min.js"></script>
+    <script>
+        $(document).ready(function() {
+            $('#export-last-20-form').on('submit', function(e) {
+                e.preventDefault();
+
+                $.ajax({
+                    type: 'POST',
+                    url: '/export-last-20',
+                    success: function(response) {
+                        $('#modalBody').html(
+                            '<div class="alert alert-success" role="alert">' + 
+                            response.message + 
+                            '</div>'
+                        );
+                        $('#confirmationModal').modal('show');
+                    },
+                    error: function(xhr) {
+                        const response = JSON.parse(xhr.responseText);
+                        $('#modalBody').html(
+                            '<div class="alert alert-danger" role="alert">' + 
+                            (response.error || 'Error exporting the file.') + 
+                            '</div>'
+                        );
+                        $('#confirmationModal').modal('show');
+                    }
+                });
+            });
+        });
+    </script>
 </body>
 </html>

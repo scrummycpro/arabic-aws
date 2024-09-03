@@ -1,9 +1,10 @@
-from flask import Flask, request, render_template, jsonify, send_file
+from flask import Flask, request, render_template, jsonify, send_file, make_response
 from flask_admin import Admin
 from flask_admin.contrib.sqla import ModelView
 from flask_sqlalchemy import SQLAlchemy
 from flask_babel import Babel  # Import Flask-Babel instead of Flask-BabelEx
 from transformers import MarianMTModel, MarianTokenizer
+import os  # Importing os module for file handling
 import sqlite3
 import csv
 from io import StringIO
@@ -110,27 +111,26 @@ def translate():
 
 @app.route('/export', methods=['POST'])
 def export():
-    try:
-        translated_text = request.form.get('translated_text')
-        original_text = request.form.get('original_text')
-        
-        # Prepare CSV data in memory
-        output = StringIO()
-        writer = csv.writer(output)
-        writer.writerow(['Original Text', 'Translated Text', 'Timestamp'])
-        writer.writerow([original_text, translated_text, datetime.now().strftime("%Y-%m-%d %H:%M:%S")])
-        
-        # Rewind the buffer
-        output.seek(0)
-        
-        return send_file(output, mimetype='text/csv', as_attachment=True, download_name='translation_output.csv')
-
-    except Exception as e:
-        print(f"Error during export: {e}")  # Print error to console for debugging
-        return jsonify({'error': 'Error exporting file'}), 500
+    translated_text = request.form.get('translated_text')
+    original_text = request.form.get('original_text')
+    
+    # Prepare the CSV content in memory
+    output = StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['Original Text', 'Translated Text', 'Timestamp'])
+    writer.writerow([original_text, translated_text, datetime.now().strftime("%Y-%m-%d %H:%M:%S")])
+    
+    # Return the CSV file as a response
+    output.seek(0)
+    response = make_response(output.getvalue())
+    response.headers["Content-Disposition"] = "attachment; filename=translation_output.csv"
+    response.headers["Content-type"] = "text/csv"
+    return response
 
 @app.route('/export-last-20', methods=['POST'])
 def export_last_20():
+    file_name = "last_20_translations.csv"
+    
     try:
         output = StringIO()
 
@@ -156,11 +156,21 @@ def export_last_20():
         # Rewind the buffer
         output.seek(0)
 
-        return send_file(output, mimetype='text/csv', as_attachment=True, download_name='last_20_translations.csv')
+        # Save the CSV file temporarily
+        with open(file_name, 'w', newline='') as csvfile:
+            csvfile.write(output.getvalue())
+
+        # Retrieve the first set of AWS credentials from the database
+        credentials = AWSCredentials.query.first()
+        if credentials and upload_to_s3(file_name, credentials):
+            os.remove(file_name)  # Remove the temporary file after uploading
+            return jsonify({'message': 'File uploaded to S3 successfully'})
+        else:
+            os.remove(file_name)  # Remove the temporary file on failure
+            return jsonify({'error': 'Failed to upload to S3'}), 500
 
     except Exception as e:
-        print(f"Error during export: {e}")  # Print error to console for debugging
-        return jsonify({'error': 'Error exporting file'}), 500
+        return jsonify({'error': f'Error during export: {str(e)}'}), 500
 
 @app.route('/recent', methods=['GET'])
 def recent():
