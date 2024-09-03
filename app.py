@@ -4,9 +4,9 @@ from flask_admin.contrib.sqla import ModelView
 from flask_sqlalchemy import SQLAlchemy
 from flask_babel import Babel  # Import Flask-Babel instead of Flask-BabelEx
 from transformers import MarianMTModel, MarianTokenizer
-import os
 import sqlite3
 import csv
+from io import StringIO
 import boto3
 from datetime import datetime
 
@@ -110,53 +110,57 @@ def translate():
 
 @app.route('/export', methods=['POST'])
 def export():
-    translated_text = request.form.get('translated_text')
-    original_text = request.form.get('original_text')
-    file_name = "translation_output.csv"
+    try:
+        translated_text = request.form.get('translated_text')
+        original_text = request.form.get('original_text')
+        
+        # Prepare CSV data in memory
+        output = StringIO()
+        writer = csv.writer(output)
+        writer.writerow(['Original Text', 'Translated Text', 'Timestamp'])
+        writer.writerow([original_text, translated_text, datetime.now().strftime("%Y-%m-%d %H:%M:%S")])
+        
+        # Rewind the buffer
+        output.seek(0)
+        
+        return send_file(output, mimetype='text/csv', as_attachment=True, download_name='translation_output.csv')
 
-    # Save the original and translated text to a CSV file
-    with open(file_name, 'w', newline='') as csvfile:
-        fieldnames = ['Original Text', 'Translated Text', 'Timestamp']
-        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-
-        writer.writeheader()
-        writer.writerow({'Original Text': original_text, 'Translated Text': translated_text, 'Timestamp': datetime.now()})
-    
-    # Retrieve the first set of AWS credentials from the database
-    credentials = AWSCredentials.query.first()
-    if credentials and upload_to_s3(file_name, credentials):
-        return jsonify({'message': 'File saved and uploaded to S3 successfully', 'file_name': file_name})
-    else:
-        return jsonify({'error': 'Failed to upload to S3'}), 500
+    except Exception as e:
+        print(f"Error during export: {e}")  # Print error to console for debugging
+        return jsonify({'error': 'Error exporting file'}), 500
 
 @app.route('/export-last-20', methods=['POST'])
 def export_last_20():
-    file_name = "last_20_translations.csv"
-    
-    with sqlite3.connect('translations.db') as conn:
-        cursor = conn.cursor()
-        cursor.execute('''
-            SELECT original_text, translated_text, timestamp
-            FROM translations
-            ORDER BY timestamp DESC
-            LIMIT 20
-        ''')
-        rows = cursor.fetchall()
+    try:
+        output = StringIO()
 
-    with open(file_name, 'w', newline='') as csvfile:
-        fieldnames = ['Original Text', 'Translated Text', 'Timestamp']
-        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        with sqlite3.connect('translations.db') as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT original_text, translated_text, timestamp
+                FROM translations
+                ORDER BY timestamp DESC
+                LIMIT 20
+            ''')
+            rows = cursor.fetchall()
 
-        writer.writeheader()
+        if not rows:
+            return jsonify({'error': 'No data available for export'}), 400
+
+        # Write the CSV data to the output buffer
+        writer = csv.writer(output)
+        writer.writerow(['Original Text', 'Translated Text', 'Timestamp'])
         for row in rows:
-            writer.writerow({'Original Text': row[0], 'Translated Text': row[1], 'Timestamp': row[2]})
-    
-    # Retrieve the first set of AWS credentials from the database
-    credentials = AWSCredentials.query.first()
-    if credentials and upload_to_s3(file_name, credentials):
-        return jsonify({'message': 'File saved and uploaded to S3 successfully', 'file_name': file_name})
-    else:
-        return jsonify({'error': 'Failed to upload to S3'}), 500
+            writer.writerow([row[0], row[1], row[2]])
+
+        # Rewind the buffer
+        output.seek(0)
+
+        return send_file(output, mimetype='text/csv', as_attachment=True, download_name='last_20_translations.csv')
+
+    except Exception as e:
+        print(f"Error during export: {e}")  # Print error to console for debugging
+        return jsonify({'error': 'Error exporting file'}), 500
 
 @app.route('/recent', methods=['GET'])
 def recent():
@@ -176,4 +180,4 @@ if __name__ == '__main__':
     with app.app_context():
         db.create_all()  # Create the database tables if they don't exist
     init_db()  # Initialize the translation database
-    app.run(debug=True)
+    app.run(debug=True, port=9000)
